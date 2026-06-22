@@ -298,6 +298,26 @@
       display: none;
     }
 
+    /* Supplier Hover Tooltip */
+    .supplier-tooltip {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      background: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      z-index: 110;
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 6px;
+      font-size: 12px;
+      pointer-events: none;
+    }
+
     .autocomplete-item {
       padding: 12px;
       cursor: pointer;
@@ -639,6 +659,16 @@
           </div>
           <div id="supplier-autocomplete" class="autocomplete-results"></div>
           <input type="hidden" id="selected-supplier-id">
+          <!-- Supplier Hover Tooltip -->
+          <div id="supplier-tooltip" class="supplier-tooltip">
+            <div style="font-weight: 700; color: var(--primary); border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 4px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="building" style="width: 14px; height: 14px;"></i>
+              <span>Datos del Proveedor (YiQi ERP)</span>
+            </div>
+            <div id="tooltip-content" style="display: flex; flex-direction: column; gap: 4px;">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
         </div>
 
         <!-- Tipo, Punto de Venta y Número -->
@@ -662,20 +692,16 @@
           </div>
         </div>
 
-        <!-- Fechas -->
-        <div class="form-row">
+        <!-- Fechas, Moneda y Cotización -->
+        <div style="display: grid; grid-template-columns: 1.2fr 1.2fr 1fr 0.6fr; gap: 12px;">
           <div class="form-group">
             <label for="date-emission">Fecha Emisión</label>
             <input type="date" id="date-emission">
           </div>
           <div class="form-group">
-            <label for="date-due">Fecha Vencimiento</label>
+            <label for="date-due">Fecha Vence</label>
             <input type="date" id="date-due">
           </div>
-        </div>
-
-        <!-- Moneda y cotizacion -->
-        <div class="form-row">
           <div class="form-group">
             <label for="currency">Moneda</label>
             <select id="currency">
@@ -684,7 +710,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="exchange-rate">Cotización</label>
+            <label for="exchange-rate">Cotiz.</label>
             <input type="number" id="exchange-rate" value="1" step="0.01" readonly>
           </div>
         </div>
@@ -835,9 +861,23 @@
             <i data-lucide="eye" style="width: 18px; height: 18px; color: var(--primary);"></i>
             Vista del Comprobante
           </span>
-          <button type="button" id="btn-close-viewer" class="btn btn-secondary btn-icon-only" style="background: none; border: none; padding: 4px;" title="Ocultar visor">
-            <i data-lucide="eye-off" style="width: 16px; height: 16px; color: var(--text-muted);"></i>
-          </button>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <!-- Zoom controls -->
+            <button type="button" id="btn-zoom-out" class="btn btn-secondary btn-icon-only" style="padding: 4px; background: none; border: none; cursor: pointer;" title="Alejar (Zoom Out)">
+              <i data-lucide="zoom-out" style="width: 16px; height: 16px; color: var(--text-muted);"></i>
+            </button>
+            <span id="zoom-level-text" style="font-size: 12px; color: var(--text-muted); min-width: 36px; text-align: center; font-weight: 600;">100%</span>
+            <button type="button" id="btn-zoom-in" class="btn btn-secondary btn-icon-only" style="padding: 4px; background: none; border: none; cursor: pointer;" title="Acercar (Zoom In)">
+              <i data-lucide="zoom-in" style="width: 16px; height: 16px; color: var(--text-muted);"></i>
+            </button>
+            <button type="button" id="btn-zoom-reset" class="btn btn-secondary btn-icon-only" style="padding: 4px; background: none; border: none; cursor: pointer;" title="Restablecer Zoom">
+              <i data-lucide="maximize-2" style="width: 16px; height: 16px; color: var(--text-muted);"></i>
+            </button>
+            <span style="border-left: 1px solid rgba(255,255,255,0.15); height: 16px; margin: 0 4px;"></span>
+            <button type="button" id="btn-close-viewer" class="btn btn-secondary btn-icon-only" style="background: none; border: none; padding: 4px;" title="Ocultar visor">
+              <i data-lucide="eye-off" style="width: 16px; height: 16px; color: var(--text-muted);"></i>
+            </button>
+          </div>
         </div>
         <div id="viewer-container" style="flex: 1; overflow: auto; display: flex; justify-content: center; align-items: flex-start; background: #0f172a; border-radius: 8px; padding: 12px; border: 1px solid rgba(255, 255, 255, 0.05); min-height: 600px;">
           <!-- Preview content (Image or Canvas) -->
@@ -1230,6 +1270,8 @@
     let lastParsedCuit = "";
     // Global OCR tracker for auto-learning feedback loop
     let lastOcrResult = null;
+    let selectedSupplierObj = null;
+    let currentZoom = 100;
 
     // Configure PDF.js Worker
     if (window.pdfjsLib) {
@@ -1317,6 +1359,7 @@
       // Reset supplier dataset iva and disabled states if the input is cleared
       if (query === "") {
         selectedSupplierId.value = "";
+        selectedSupplierObj = null;
         supplierInput.dataset.iva = "";
         updateLockStatesBasedOnSupplierIva();
       }
@@ -1368,6 +1411,7 @@
               div.addEventListener('click', () => {
                 supplierInput.value = `${supplier.nombre} (${supplier.cuit || 'S/D'})`;
                 selectedSupplierId.value = supplier.id;
+                selectedSupplierObj = supplier;
                 supplierAutocomplete.style.display = 'none';
                 
                 // Store selected supplier's IVA condition in dataset
@@ -1759,6 +1803,11 @@
         // Show viewer card and apply grid styling
         document.getElementById('document-viewer-card').style.display = 'flex';
         document.querySelector('.app-grid').classList.add('has-preview');
+        
+        // Reset zoom state
+        currentZoom = 100;
+        applyZoom();
+        
         lucide.createIcons();
       } catch (err) {
         console.error("Error al renderizar PDF en el visor:", err);
@@ -1777,6 +1826,11 @@
         // Show viewer card and apply grid styling
         document.getElementById('document-viewer-card').style.display = 'flex';
         document.querySelector('.app-grid').classList.add('has-preview');
+        
+        // Reset zoom state
+        currentZoom = 100;
+        applyZoom();
+        
         lucide.createIcons();
       };
       reader.readAsDataURL(file);
@@ -1785,6 +1839,80 @@
     document.getElementById('btn-close-viewer').addEventListener('click', () => {
       document.getElementById('document-viewer-card').style.display = 'none';
       document.querySelector('.app-grid').classList.remove('has-preview');
+      currentZoom = 100;
+      applyZoom();
+    });
+
+    // Zoom and Lupa Functions
+    function applyZoom() {
+      const zoomText = document.getElementById('zoom-level-text');
+      if (zoomText) {
+        zoomText.textContent = `${currentZoom}%`;
+      }
+      const canvas = document.getElementById('viewer-canvas');
+      const img = document.getElementById('viewer-img');
+      
+      if (currentZoom === 100) {
+        if (canvas) {
+          canvas.style.width = '';
+          canvas.style.maxWidth = '100%';
+        }
+        if (img) {
+          img.style.width = '';
+          img.style.maxWidth = '100%';
+        }
+      } else {
+        if (canvas) {
+          canvas.style.width = `${currentZoom}%`;
+          canvas.style.maxWidth = 'none';
+        }
+        if (img) {
+          img.style.width = `${currentZoom}%`;
+          img.style.maxWidth = 'none';
+        }
+      }
+    }
+
+    document.getElementById('btn-zoom-in').addEventListener('click', () => {
+      currentZoom = Math.min(250, currentZoom + 25);
+      applyZoom();
+    });
+
+    document.getElementById('btn-zoom-out').addEventListener('click', () => {
+      currentZoom = Math.max(100, currentZoom - 25);
+      applyZoom();
+    });
+
+    document.getElementById('btn-zoom-reset').addEventListener('click', () => {
+      currentZoom = 100;
+      applyZoom();
+    });
+
+    // Tooltip validation event listeners
+    const supplierTooltip = document.getElementById('supplier-tooltip');
+    const tooltipContent = document.getElementById('tooltip-content');
+
+    supplierInput.addEventListener('mouseenter', () => {
+      if (selectedSupplierObj) {
+        const nombre = selectedSupplierObj.razonSocial || selectedSupplierObj.nombre || 'S/D';
+        const cuit = selectedSupplierObj.cuit || 'S/D';
+        const iva = selectedSupplierObj.ivaCondition || 'S/D';
+        const direccion = selectedSupplierObj.direccion || selectedSupplierObj.address || 'S/D';
+        const localidad = selectedSupplierObj.localidad || selectedSupplierObj.city || 'S/D';
+        
+        tooltipContent.innerHTML = `
+          <div><strong>Razón Social:</strong> <span>${nombre}</span></div>
+          <div><strong>CUIT:</strong> <span>${cuit}</span></div>
+          <div><strong>Condición IVA:</strong> <span style="color: var(--warning); font-weight: 500;">${iva}</span></div>
+          <div><strong>Dirección:</strong> <span>${direccion}</span></div>
+          <div><strong>Localidad:</strong> <span>${localidad}</span></div>
+        `;
+        supplierTooltip.style.display = 'flex';
+      }
+    });
+
+    supplierInput.addEventListener('mouseleave', () => {
+      supplierTooltip.style.display = 'none';
     });
 
     // Save Invoice Call
@@ -2022,6 +2150,8 @@
           document.getElementById('viewer-img').style.display = 'none';
           document.getElementById('viewer-canvas').style.display = 'none';
           document.getElementById('viewer-placeholder').style.display = 'flex';
+          currentZoom = 100;
+          applyZoom();
         } else {
           throw new Error(result.error || "Ocurrió un error inesperado al procesar la factura.");
         }
@@ -2162,6 +2292,7 @@
             
              card.querySelector('.btn-select-existing').addEventListener('click', () => {
               selectedSupplierId.value = match.id;
+              selectedSupplierObj = match;
               supplierInput.value = `${match.razonSocial || match.nombre} (${cuitRaw})`;
               
               // Store selected supplier's IVA condition in dataset
@@ -2349,6 +2480,18 @@
         // Save IVA condition to dataset
         const selectedIvaText = provIva.options[provIva.selectedIndex].text;
         supplierInput.dataset.iva = selectedIvaText;
+        
+        // Populate selectedSupplierObj
+        selectedSupplierObj = {
+          id: supplierId,
+          nombre: social,
+          cuit: cuitRaw,
+          razonSocial: social,
+          ivaCondition: selectedIvaText,
+          direccion: address,
+          address: address,
+          direccionCompleta: `${address}, ${city}`
+        };
         
         // Auto-select invoice type based on the saved IVA condition in the modal
         if (selectedIvaText) {
@@ -2858,6 +3001,7 @@
           const supplier = json.data[0];
           supplierInput.value = `${supplier.nombre} (${supplier.cuit || 'S/D'})`;
           selectedSupplierId.value = supplier.id;
+          selectedSupplierObj = supplier;
           supplierInput.dataset.iva = supplier.ivaCondition || "";
           
           if (supplier.ivaCondition) {
