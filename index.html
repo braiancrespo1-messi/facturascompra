@@ -1885,8 +1885,14 @@
       }
       const canvas = document.getElementById('viewer-canvas');
       const img = document.getElementById('viewer-img');
+      const container = document.getElementById('viewer-container');
       
       if (currentZoom === 100) {
+        if (container) {
+          container.style.justifyContent = 'center';
+          container.style.alignItems = 'flex-start';
+          container.style.cursor = 'default';
+        }
         if (canvas) {
           canvas.style.width = '';
           canvas.style.maxWidth = '100%';
@@ -1896,6 +1902,11 @@
           img.style.maxWidth = '100%';
         }
       } else {
+        if (container) {
+          container.style.justifyContent = 'flex-start';
+          container.style.alignItems = 'flex-start';
+          container.style.cursor = 'grab';
+        }
         if (canvas) {
           canvas.style.width = `${currentZoom}%`;
           canvas.style.maxWidth = 'none';
@@ -1906,6 +1917,43 @@
         }
       }
     }
+
+    // Drag and Pan events for viewer-container
+    const viewerContainer = document.getElementById('viewer-container');
+    let isDragging = false;
+    let startX, startY;
+    let scrollLeft, scrollTop;
+
+    viewerContainer.addEventListener('mousedown', (e) => {
+      if (currentZoom <= 100) return;
+      isDragging = true;
+      viewerContainer.style.cursor = 'grabbing';
+      startX = e.pageX - viewerContainer.offsetLeft;
+      startY = e.pageY - viewerContainer.offsetTop;
+      scrollLeft = viewerContainer.scrollLeft;
+      scrollTop = viewerContainer.scrollTop;
+    });
+
+    viewerContainer.addEventListener('mouseleave', () => {
+      isDragging = false;
+      viewerContainer.style.cursor = currentZoom > 100 ? 'grab' : 'default';
+    });
+
+    viewerContainer.addEventListener('mouseup', () => {
+      isDragging = false;
+      viewerContainer.style.cursor = currentZoom > 100 ? 'grab' : 'default';
+    });
+
+    viewerContainer.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const x = e.pageX - viewerContainer.offsetLeft;
+      const y = e.pageY - viewerContainer.offsetTop;
+      const walkX = (x - startX) * 1.5;
+      const walkY = (y - startY) * 1.5;
+      viewerContainer.scrollLeft = scrollLeft - walkX;
+      viewerContainer.scrollTop = scrollTop - walkY;
+    });
 
     document.getElementById('btn-zoom-in').addEventListener('click', () => {
       currentZoom = Math.min(250, currentZoom + 25);
