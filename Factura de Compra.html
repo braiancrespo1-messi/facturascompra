@@ -204,6 +204,24 @@
       .app-grid, .app-grid.has-preview {
         grid-template-columns: 1fr !important;
       }
+      #document-viewer-card {
+        position: relative !important;
+        top: 0 !important;
+        height: 600px !important;
+        min-height: 600px !important;
+      }
+    }
+
+    #document-viewer-card {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 48px);
+      position: sticky;
+      top: 24px;
+      overflow: hidden;
+      flex-direction: column;
+      gap: 16px;
+      align-self: start;
     }
 
     /* Cards */
@@ -879,7 +897,7 @@
       </div> <!-- Cierre de #data-entry-container -->
 
       <!-- Third Panel: Document Viewer -->
-      <div class="card" id="document-viewer-card" style="display: flex; flex: 1; min-height: 800px; overflow: hidden; flex-direction: column; gap: 16px; align-self: stretch;">
+      <div class="card" id="document-viewer-card">
         <div class="card-header" style="padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
           <span class="card-title" style="display: flex; align-items: center; gap: 8px;">
             <i data-lucide="eye" style="width: 18px; height: 18px; color: var(--primary);"></i>
@@ -903,7 +921,7 @@
             </button>
           </div>
         </div>
-        <div id="viewer-container" style="flex: 1; overflow: auto; display: flex; justify-content: center; align-items: flex-start; background: #0f172a; border-radius: 8px; padding: 12px; border: 1px solid rgba(255, 255, 255, 0.05); min-height: 600px;">
+        <div id="viewer-container" style="flex: 1; overflow: auto; display: flex; justify-content: center; align-items: flex-start; background: #0f172a; border-radius: 8px; padding: 12px; border: 1px solid rgba(255, 255, 255, 0.05); user-select: none; -webkit-user-select: none;">
           <!-- Preview content (Image or Canvas) -->
           <img id="viewer-img" style="max-width: 100%; display: none; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
           <canvas id="viewer-canvas" style="max-width: 100%; display: none; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);"></canvas>
@@ -2118,6 +2136,40 @@
       const walkY = (y - startY) * 1.5;
       viewerContainer.scrollLeft = scrollLeft - walkX;
       viewerContainer.scrollTop = scrollTop - walkY;
+    });
+
+    // Touch events for mobile/tablet panning
+    viewerContainer.addEventListener('touchstart', (e) => {
+      if (currentZoom <= 100) return;
+      if (e.touches.length === 1) {
+        isDragging = true;
+        startX = e.touches[0].pageX - viewerContainer.offsetLeft;
+        startY = e.touches[0].pageY - viewerContainer.offsetTop;
+        scrollLeft = viewerContainer.scrollLeft;
+        scrollTop = viewerContainer.scrollTop;
+      }
+    }, { passive: true });
+
+    viewerContainer.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+      if (e.touches.length === 1) {
+        // Prevent default screen scrolling while dragging inside the zoomed voucher
+        e.preventDefault();
+        const x = e.touches[0].pageX - viewerContainer.offsetLeft;
+        const y = e.touches[0].pageY - viewerContainer.offsetTop;
+        const walkX = (x - startX) * 1.5;
+        const walkY = (y - startY) * 1.5;
+        viewerContainer.scrollLeft = scrollLeft - walkX;
+        viewerContainer.scrollTop = scrollTop - walkY;
+      }
+    }, { passive: false });
+
+    viewerContainer.addEventListener('touchend', () => {
+      isDragging = false;
+    });
+
+    viewerContainer.addEventListener('touchcancel', () => {
+      isDragging = false;
     });
 
     // Zoom-to-cursor using mouse wheel
