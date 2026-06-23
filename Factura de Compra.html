@@ -2896,9 +2896,9 @@
       const customIgnore = (rules && rules.ignoreKeywords) || [];
       const finalItemIgnore = [...ignoreKeywords, ...customIgnore];
 
-      // Collect all single amount lines
+      // Collect all single amount lines with original line index
       const amounts = [];
-      ocrLines.forEach(line => {
+      ocrLines.forEach((line, idx) => {
         const amtMatch = line.match(/^\s*[$sS]?\s*(\d+(?:\.\d{3})*(?:[\.,]\d{2}))\s*$/);
         if (amtMatch) {
           let amountStr = amtMatch[1];
@@ -2909,10 +2909,12 @@
           }
           const amtVal = parseFloat(amountStr) || 0;
           if (amtVal > 0) {
-            amounts.push(amtVal);
+            amounts.push({ val: amtVal, lineIdx: idx });
           }
         }
       });
+
+      const amountValues = amounts.map(a => a.val);
 
       // Tier 1: Quantity Multiplication Check (for standard tabular layout)
       const qtyItemLines = [];
@@ -2933,14 +2935,14 @@
       });
 
       let tier1Success = false;
-      if (qtyItemLines.length > 0 && amounts.length >= qtyItemLines.length * 2) {
+      if (qtyItemLines.length > 0 && amountValues.length >= qtyItemLines.length * 2) {
         const tempItems = [];
         let amtIdx = 0;
         let paired = true;
         for (let i = 0; i < qtyItemLines.length; i++) {
           const item = qtyItemLines[i];
-          const p1 = amounts[amtIdx];
-          const p2 = amounts[amtIdx + 1];
+          const p1 = amountValues[amtIdx];
+          const p2 = amountValues[amtIdx + 1];
           if (p1 && p2 && Math.abs(p2 - (item.cantidad * p1)) < 1.5) {
             tempItems.push({
               concepto: item.concepto,
@@ -2959,93 +2961,89 @@
         }
       }
 
-      // Tier 2: Consecutive Column Block matching (for service/column invoices)
+      // Tier 2: Net Sum Matching
+      let tier2Success = false;
       if (!tier1Success) {
-        const descs = [];
-        ocrLines.forEach(line => {
-          const lineTrimmed = line.trim();
-          const isAmt = lineTrimmed.match(/^\s*[$sS]?\s*(\d+(?:\.\d{3})*(?:[\.,]\d{2}))\s*$/);
-          if (isAmt) return;
-
-          if (/[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]/.test(lineTrimmed)) {
-            const lineLower = lineTrimmed.toLowerCase();
-            const shouldIgnore = finalItemIgnore.some(kw => lineLower.includes(kw.toLowerCase()));
-            if (shouldIgnore) return;
-
-            descs.push({
-              concepto: lineTrimmed,
-              cantidad: 1
-            });
-          }
-        });
-
-        let bestBlock = null;
-        let maxN = 0;
-        
-        const lineTypes = ocrLines.map(line => {
-          const lineTrimmed = line.trim();
-          if (!lineTrimmed) return 'I';
-          
-          const amtMatch = lineTrimmed.match(/^\s*[$sS]?\s*(\d+(?:\.\d{3})*(?:[\.,]\d{2}))\s*$/);
-          if (amtMatch) return 'A';
-          
-          if (/[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]/.test(lineTrimmed)) {
-            const lineLower = lineTrimmed.toLowerCase();
-            const shouldIgnore = finalItemIgnore.some(kw => lineLower.includes(kw.toLowerCase()));
-            if (shouldIgnore) return 'I';
-            return 'D';
-          }
-          return 'I';
-        });
-
-        for (let Q = 2; Q <= 15; Q++) {
-          for (let i = 0; i <= ocrLines.length - Q * 2; i++) {
-            let matchesD = true;
-            let matchesA = true;
-            for (let j = 0; j < Q; j++) {
-              if (lineTypes[i + j] !== 'D') matchesD = false;
-              if (lineTypes[i + Q + j] !== 'A') matchesA = false;
-            }
-            if (matchesD && matchesA) {
-              if (Q > maxN) {
-                maxN = Q;
-                bestBlock = { startIdx: i, length: Q };
+        const targetNet = data.neto || (data.total - data.iva) || 0;
+        if (targetNet > 0 && amounts.length > 0) {
+          let matchedSubsegment = null;
+          for (let len = 1; len <= amounts.length; len++) {
+            for (let start = 0; start <= amounts.length - len; start++) {
+              const sub = amounts.slice(start, start + len);
+              const sum = sub.reduce((a, b) => a + b.val, 0);
+              if (Math.abs(sum - targetNet) < 2.0) {
+                matchedSubsegment = { start, len, sum };
+                break;
               }
+            }
+            if (matchedSubsegment) break;
+          }
+
+          if (matchedSubsegment) {
+            const itemAmounts = amounts.slice(matchedSubsegment.start, matchedSubsegment.start + matchedSubsegment.len);
+            const firstAmountLineIdx = itemAmounts[0].lineIdx;
+
+            const descCandidates = [];
+            ocrLines.forEach((line, idx) => {
+              if (idx < firstAmountLineIdx) {
+                const lineTrimmed = line.trim();
+                if (/[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]/.test(lineTrimmed)) {
+                  const lineLower = lineTrimmed.toLowerCase();
+                  const shouldIgnore = finalItemIgnore.some(kw => lineLower.includes(kw.toLowerCase()));
+                  if (!shouldIgnore) {
+                    descCandidates.push(lineTrimmed);
+                  }
+                }
+              }
+            });
+
+            const len = matchedSubsegment.len;
+            if (descCandidates.length >= len) {
+              const selectedDescs = descCandidates.slice(-len);
+              for (let i = 0; i < len; i++) {
+                data.items.push({
+                  concepto: selectedDescs[i],
+                  cantidad: 1,
+                  precioUnitario: itemAmounts[i].val
+                });
+              }
+              tier2Success = true;
             }
           }
         }
 
-        if (bestBlock) {
-          for (let j = 0; j < bestBlock.length; j++) {
-            const descLine = ocrLines[bestBlock.startIdx + j];
-            const amtLine = ocrLines[bestBlock.startIdx + bestBlock.length + j];
-            
-            let amountStr = amtLine.replace(/^\s*[$sS]?\s*/, '');
-            if (amountStr.includes(",") && amountStr.includes(".")) {
-              amountStr = amountStr.replace(/\./g, "").replace(",", ".");
-            } else if (amountStr.includes(",")) {
-              amountStr = amountStr.replace(",", ".");
-            }
-            const amtVal = parseFloat(amountStr) || 0;
+        // Fallback Tier 3: simple 1-to-1 fallback
+        if (!tier2Success) {
+          const descs = [];
+          ocrLines.forEach(line => {
+            const lineTrimmed = line.trim();
+            const isAmt = lineTrimmed.match(/^\s*[$sS]?\s*(\d+(?:\.\d{3})*(?:[\.,]\d{2}))\s*$/);
+            if (isAmt) return;
 
-            data.items.push({
-              concepto: descLine.trim(),
-              cantidad: 1,
-              precioUnitario: amtVal
-            });
-           }
-         } else if (descs.length > 0 && amounts.length > 0) {
-           // Tier 3: simple 1-to-1 fallback
-           const alignLength = Math.min(descs.length, amounts.length);
-           for (let i = 0; i < alignLength; i++) {
-             data.items.push({
-               concepto: descs[i].concepto,
-               cantidad: descs[i].cantidad,
-               precioUnitario: amounts[i]
-             });
-           }
-         }
-       }
+            if (/[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]/.test(lineTrimmed)) {
+              const lineLower = lineTrimmed.toLowerCase();
+              const shouldIgnore = finalItemIgnore.some(kw => lineLower.includes(kw.toLowerCase()));
+              if (shouldIgnore) return;
+
+              descs.push({
+                concepto: lineTrimmed,
+                cantidad: 1
+              });
+            }
+          });
+
+          if (descs.length > 0 && amountValues.length > 0) {
+            const alignLength = Math.min(descs.length, amountValues.length);
+            for (let i = 0; i < alignLength; i++) {
+              data.items.push({
+                concepto: descs[i].concepto,
+                cantidad: descs[i].cantidad,
+                precioUnitario: amountValues[i]
+              });
+            }
+          }
+        }
+      }
 
        // Fallback row
        if (data.items.length === 0) {
