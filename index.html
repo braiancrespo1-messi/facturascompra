@@ -1307,6 +1307,82 @@
       return parts.join(',');
     }
 
+    function parseFormattedNumber(str) {
+      if (str === undefined || str === null) return 0;
+      const clean = String(str).replace(/\./g, '').replace(',', '.');
+      return parseFloat(clean) || 0;
+    }
+
+    function handleInputFocus(e) {
+      // Select the content to make replacement easier
+      setTimeout(() => e.target.select(), 50);
+    }
+
+    function handleInputBlur(e) {
+      const raw = e.target.value.trim();
+      if (!raw) {
+        e.target.value = '';
+        return;
+      }
+      const val = parseFormattedNumber(raw);
+      e.target.value = formatNumber(val);
+    }
+
+    function formatAsYouType(val) {
+      if (!val) return "";
+      
+      let decimalIndex = val.lastIndexOf(',');
+      if (decimalIndex === -1) {
+        const lastDotIdx = val.lastIndexOf('.');
+        if (lastDotIdx !== -1) {
+          const afterDot = val.substring(lastDotIdx + 1);
+          if (afterDot.length !== 3 || /\D/.test(afterDot)) {
+            decimalIndex = lastDotIdx;
+          }
+        }
+      }
+      
+      let integerPart = "";
+      let decimalPart = "";
+      let hasDecimal = false;
+      
+      if (decimalIndex !== -1) {
+        integerPart = val.substring(0, decimalIndex).replace(/\D/g, '');
+        decimalPart = val.substring(decimalIndex + 1).replace(/\D/g, '');
+        hasDecimal = true;
+      } else {
+        integerPart = val.replace(/\D/g, '');
+      }
+      
+      let formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+      
+      let result = formattedInteger;
+      if (hasDecimal) {
+        result += ',' + decimalPart;
+      }
+      return result;
+    }
+
+    function handleInputFormatting(e) {
+      const input = e.target;
+      const val = input.value;
+      if (!val) return;
+      
+      const selectionStart = input.selectionStart;
+      const originalLength = val.length;
+      const formatted = formatAsYouType(val);
+      
+      if (formatted !== val) {
+        input.value = formatted;
+        const newLength = formatted.length;
+        const cursorOffset = newLength - originalLength;
+        let newCursorPos = selectionStart + cursorOffset;
+        if (newCursorPos < 0) newCursorPos = 0;
+        if (newCursorPos > newLength) newCursorPos = newLength;
+        input.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }
+
     // Configure PDF.js Worker
     if (window.pdfjsLib) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
@@ -1526,13 +1602,16 @@
       tdCant.appendChild(inputCant);
       tr.appendChild(tdCant);
 
-      // Precio Unitario
+      // Precio Unitario (Formatted input)
       const tdPrice = document.createElement('td');
       const inputPrice = document.createElement('input');
-      inputPrice.type = 'number';
-      inputPrice.value = precio;
-      inputPrice.placeholder = "0.00";
+      inputPrice.type = 'text';
+      inputPrice.value = formatNumber(precio);
+      inputPrice.placeholder = "0,00";
       inputPrice.style.textAlign = 'right';
+      inputPrice.addEventListener('focus', handleInputFocus);
+      inputPrice.addEventListener('blur', handleInputBlur);
+      inputPrice.addEventListener('input', handleInputFormatting);
       tdPrice.appendChild(inputPrice);
       tr.appendChild(tdPrice);
 
@@ -1579,7 +1658,7 @@
       // Listeners for auto calculation
       const updateCalculations = () => {
         const qty = parseFloat(inputCant.value) || 0;
-        const up = parseFloat(inputPrice.value) || 0;
+        const up = parseFormattedNumber(inputPrice.value);
         const net = qty * up;
         let vatRate = 0;
 
@@ -1619,7 +1698,7 @@
         const inputs = tr.querySelectorAll('input');
         const select = tr.querySelector('select');
         const qty = parseFloat(inputs[1].value) || 0;
-        const up = parseFloat(inputs[2].value) || 0;
+        const up = parseFormattedNumber(inputs[2].value);
         const net = qty * up;
         let vatRate = 0;
 
@@ -1638,7 +1717,7 @@
       let grandPerceptions = 0;
       const perceptionInputs = perceptionsTbody.querySelectorAll('.perception-importe');
       perceptionInputs.forEach(input => {
-        grandPerceptions += parseFloat(input.value) || 0;
+        grandPerceptions += parseFormattedNumber(input.value);
       });
 
       grandTotal += grandPerceptions;
@@ -2078,7 +2157,7 @@
         const select = tr.querySelector('select');
         const concepto = inputs[0].value.trim();
         const cantidad = parseFloat(inputs[1].value) || 0;
-        const precioUnitario = parseFloat(inputs[2].value) || 0;
+        const precioUnitario = parseFormattedNumber(inputs[2].value);
         const alicuotaId = select.value;
 
         if (!concepto || cantidad <= 0 || precioUnitario <= 0) {
@@ -2116,7 +2195,7 @@
         const select = tr.querySelector('.perception-concept');
         const input = tr.querySelector('.perception-importe');
         const conceptId = select.value;
-        const importe = parseFloat(input.value) || 0;
+        const importe = parseFormattedNumber(input.value);
 
         if (conceptId && importe > 0) {
           perceptions.push({
@@ -2897,6 +2976,78 @@
       data.neto = parseAmount(/(?:neto|subtotal|neto gravado|gravado)\s*[:\-]?\s*[$sS]?\s*(\d+(?:[\.,]\d{3})*[\.,]\d{2})/i, text);
       data.iva = parseAmount(/(?<!condición\s|condicion\s)\b(?:iva|i\.v\.a\.)\b\s*(?:21%|10\.5%|contenido|total|liquidado)?\s*[:\-]?\s*[$sS]?\s*(\d+(?:[\.,]\d{3})*[\.,]\d{2})/i, text);
 
+      const ocrLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+      // Block-alignment for separate columns of labels and amounts
+      const footerLabelRegex = /(?:\bsubtotal\b|\bneto\b|\biva\b|\bi\.v\.a\.|\btotal\b|\bpercep|\bperc\.|\bganancia\b|\binterno\b|\biibb\b)/i;
+      const labelIgnore = ["responsable", "inscripto", "cuit", "ing. brutos", "inicio de actividad", "cliente:", "nombre:", "dirección:", "localidad:", "c.u.i.t."];
+      
+      const labelLines = [];
+      ocrLines.forEach((line, idx) => {
+        const lineLower = line.toLowerCase();
+        if (footerLabelRegex.test(line)) {
+          const shouldIgnore = labelIgnore.some(kw => lineLower.includes(kw));
+          if (!shouldIgnore) {
+            // Exclude percentage values like "21,00%"
+            const hasAmt = line.match(/\b\d+(?:[\.,]\d{3})*[\.,]\d{2}\b(?!\s*%)/);
+            if (!hasAmt) {
+              labelLines.push({ text: line, lineIdx: idx });
+            }
+          }
+        }
+      });
+
+      const separateAmounts = [];
+      if (labelLines.length > 0) {
+        const firstLabelIdx = labelLines[0].lineIdx;
+        ocrLines.forEach((line, idx) => {
+          if (idx > firstLabelIdx) {
+            const amtMatch = line.match(/^\s*[$sS]?\s*(\d+(?:\.\d{3})*[\.,]\d{2})\s*$/);
+            if (amtMatch) {
+              let amountStr = amtMatch[1];
+              if (amountStr.includes(",") && amountStr.includes(".")) {
+                amountStr = amountStr.replace(/\./g, "").replace(",", ".");
+              } else if (amountStr.includes(",")) {
+                amountStr = amountStr.replace(",", ".");
+              }
+              const amtVal = parseFloat(amountStr) || 0;
+              if (amtVal > 0) {
+                separateAmounts.push({ val: amtVal, lineIdx: idx });
+              }
+            }
+          }
+        });
+      }
+
+      if (labelLines.length > 0 && separateAmounts.length === labelLines.length) {
+        for (let i = 0; i < labelLines.length; i++) {
+          const lbl = labelLines[i].text.toLowerCase();
+          const val = separateAmounts[i].val;
+          
+          if (lbl.includes("subtotal") || lbl.includes("neto") || lbl.includes("neto gravado") || lbl.includes("gravado")) {
+            if (data.neto === 0) data.neto = val;
+          }
+          if (lbl.includes("iva") || lbl.includes("i.v.a.")) {
+            if (data.iva === 0) data.iva = val;
+          }
+          if (lbl.includes("total")) {
+            if (data.total === 0) data.total = val;
+          }
+          if (lbl.includes("percep") || lbl.includes("perc.")) {
+            let detectedTaxType = "iibb";
+            if (lbl.includes("iva")) detectedTaxType = "iva";
+            else if (lbl.includes("gan") || lbl.includes("ganancia")) detectedTaxType = "ganancias";
+            else if (lbl.includes("int") || lbl.includes("interno")) detectedTaxType = "internos";
+            
+            const exists = data.perceptions.some(p => Math.abs(p.importe - val) < 0.05);
+            if (!exists) {
+              data.perceptions.push({ taxType: detectedTaxType, rawLabel: labelLines[i].text, importe: val });
+            }
+          }
+        }
+      }
+
+      // Fallbacks
       if (data.total === 0) {
         const moneyMatches = text.match(/\b\d+(?:[\.,]\d{3})*[\.,]\d{2}\b/g) || [];
         const floatAmounts = moneyMatches.map(m => {
@@ -2913,32 +3064,6 @@
       if (data.neto === 0 && data.total > 0) data.neto = data.total - data.iva;
       if (data.iva === 0 && data.total > data.neto) data.iva = data.total - data.neto;
 
-      const ocrLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-
-      // 6. Perceptions
-      ocrLines.forEach(line => {
-        const lineLower = line.toLowerCase();
-        if (lineLower.includes("percep") || lineLower.includes("perc.")) {
-          const numMatch = line.match(/(\d+(?:[\.,]\d{3})*[\.,]\d{2})\s*$/) || line.match(/(\d+(?:[\.,]\d{3})*[\.,]\d{2})\b/);
-          if (numMatch) {
-            let amountStr = numMatch[1];
-            if (amountStr.includes(",") && amountStr.includes(".")) {
-              amountStr = amountStr.replace(/\./g, "").replace(",", ".");
-            } else if (amountStr.includes(",")) {
-              amountStr = amountStr.replace(",", ".");
-            }
-            const amount = parseFloat(amountStr) || 0;
-            if (amount > 0) {
-              let detectedTaxType = "iibb";
-              if (lineLower.includes("iva")) detectedTaxType = "iva";
-              else if (lineLower.includes("gan") || lineLower.includes("ganancia")) detectedTaxType = "ganancias";
-              else if (lineLower.includes("int") || lineLower.includes("interno")) detectedTaxType = "internos";
-              data.perceptions.push({ taxType: detectedTaxType, rawLabel: line, importe: amount });
-            }
-          }
-        }
-      });
-
       // --- TRIPLE-TIERED ITEMS PARSING STRATEGY ---
       const ignoreKeywords = ["total", "subtotal", "neto", "iva", "i.v.a.", "percep", "perc.", "cae", "cuit", "ing. brutos", "inicio de actividad", "tel:", "cliente:", "dirección:", "localidad:", "c.u.i.t.", "precio", "descripción", "descripcion", "cantidad", "concepto", "pago", "vencimiento", "fecha", "nro", "nº", "número", "factura", "original", "duplicado", "remito", "domicilio"];
       const customIgnore = (rules && rules.ignoreKeywords) || [];
@@ -2947,17 +3072,20 @@
       // Collect all single amount lines with original line index
       const amounts = [];
       ocrLines.forEach((line, idx) => {
-        const amtMatch = line.match(/^\s*[$sS]?\s*(\d+(?:\.\d{3})*(?:[\.,]\d{2}))\s*$/);
-        if (amtMatch) {
-          let amountStr = amtMatch[1];
-          if (amountStr.includes(",") && amountStr.includes(".")) {
-            amountStr = amountStr.replace(/\./g, "").replace(",", ".");
-          } else if (amountStr.includes(",")) {
-            amountStr = amountStr.replace(",", ".");
-          }
-          const amtVal = parseFloat(amountStr) || 0;
-          if (amtVal > 0) {
-            amounts.push({ val: amtVal, lineIdx: idx });
+        // Only collect item amounts before the first footer label
+        if (labelLines.length === 0 || idx < labelLines[0].lineIdx) {
+          const amtMatch = line.match(/^\s*[$sS]?\s*(\d+(?:\.\d{3})*(?:[\.,]\d{2}))\s*$/);
+          if (amtMatch) {
+            let amountStr = amtMatch[1];
+            if (amountStr.includes(",") && amountStr.includes(".")) {
+              amountStr = amountStr.replace(/\./g, "").replace(",", ".");
+            } else if (amountStr.includes(",")) {
+              amountStr = amountStr.replace(",", ".");
+            }
+            const amtVal = parseFloat(amountStr) || 0;
+            if (amtVal > 0) {
+              amounts.push({ val: amtVal, lineIdx: idx });
+            }
           }
         }
       });
@@ -3246,7 +3374,7 @@
           </select>
         </td>
         <td>
-          <input type="number" class="perception-importe" value="${importe}" placeholder="0.00" step="0.01" style="text-align: right;">
+          <input type="text" class="perception-importe" value="${formatNumber(importe)}" placeholder="0,00" style="text-align: right;">
         </td>
         <td style="text-align: center;">
           <button type="button" class="btn-del-perception" style="background: none; border: none; cursor: pointer; color: var(--danger);">
@@ -3255,8 +3383,13 @@
         </td>
       `;
 
+      const inputImp = tr.querySelector('.perception-importe');
+      inputImp.addEventListener('focus', handleInputFocus);
+      inputImp.addEventListener('blur', handleInputBlur);
+      inputImp.addEventListener('input', handleInputFormatting);
+
       tr.querySelector('.perception-concept').addEventListener('change', calculateTotals);
-      tr.querySelector('.perception-importe').addEventListener('input', calculateTotals);
+      inputImp.addEventListener('input', calculateTotals);
       tr.querySelector('.btn-del-perception').addEventListener('click', () => {
         tr.remove();
         calculateTotals();
