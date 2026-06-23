@@ -755,6 +755,12 @@
             </select>
           </div>
         </div>
+
+        <!-- Observaciones -->
+        <div class="form-group" style="margin-top: 12px;">
+          <label for="invoice-observations">Observaciones</label>
+          <textarea id="invoice-observations" placeholder="Escriba comentarios u observaciones aquí..." rows="2" style="width: 100%; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(15,23,42,0.3); color: var(--text-main); padding: 8px; font-family: inherit; font-size: 13px; resize: none;"></textarea>
+        </div>
       </div>
 
       <!-- Right Panel: Items Table -->
@@ -771,11 +777,12 @@
           <table id="items-table">
             <thead>
               <tr>
-                <th style="width: 35%;">Concepto / Descripción</th>
+                <th style="width: 32%;">Concepto / Descripción</th>
                 <th style="width: 8%;">Cant.</th>
-                <th style="width: 24%;">Unitario ($)</th>
-                <th style="width: 15%;">Alícuota IVA</th>
-                <th style="width: 18%; text-align: right;">Subtotal</th>
+                <th style="width: 18%;">Unitario ($)</th>
+                <th style="width: 10%;">Dto. (%)</th>
+                <th style="width: 14%;">Alícuota IVA</th>
+                <th style="width: 15%; text-align: right;">Subtotal</th>
                 <th style="width: 60px; text-align: center;"></th>
               </tr>
             </thead>
@@ -808,6 +815,10 @@
             <div class="summary-row">
               <span>IVA Total:</span>
               <span id="lbl-iva">$ 0.00</span>
+            </div>
+            <div class="summary-row" style="align-items: center;">
+              <span>Dto. Global (%):</span>
+              <input type="number" id="global-discount" value="0" min="0" max="100" style="width: 70px; text-align: right; padding: 4px; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; background: rgba(15,23,42,0.3); color: var(--text-main); font-weight: 600; font-size: 13px;">
             </div>
             <div class="summary-row" id="summary-row-perceptions">
               <span>Percepciones:</span>
@@ -1218,6 +1229,10 @@
       eliminarReglaOcrUrl: localStorage.getItem('tmc_eliminar_regla_ocr_url') || "https://us-central1-tmc-backend-2f5c4.cloudfunctions.net/eliminarReglaOcrProxy"
     };
 
+    let selectedFileBase64 = "";
+    let selectedFileName = "";
+    let selectedFileType = "";
+
     // Initialize Lucide Icons
     lucide.createIcons();
 
@@ -1575,7 +1590,7 @@
       { id: "6", name: "No gravado" }
     ];
 
-    function createRow(concepto = "", cantidad = 1, precio = 0, alicuotaId = "3") {
+    function createRow(concepto = "", cantidad = 1, precio = 0, alicuotaId = "3", descuento = "") {
       // If selected supplier is No Oficial, default new items to 0% IVA (alicuotaId = "1")
       const supplierIva = String(supplierInput.dataset.iva || "").trim().toLowerCase();
       if (supplierIva.includes("no oficial")) {
@@ -1588,6 +1603,7 @@
       const inputConcepto = document.createElement('input');
       inputConcepto.type = 'text';
       inputConcepto.value = concepto;
+      inputConcepto.className = 'item-concept';
       inputConcepto.placeholder = "Ingrese descripción del concepto...";
       tdConcepto.appendChild(inputConcepto);
       tr.appendChild(tdConcepto);
@@ -1597,6 +1613,7 @@
       const inputCant = document.createElement('input');
       inputCant.type = 'number';
       inputCant.value = cantidad;
+      inputCant.className = 'item-qty';
       inputCant.min = '1';
       inputCant.style.textAlign = 'center';
       tdCant.appendChild(inputCant);
@@ -1607,6 +1624,7 @@
       const inputPrice = document.createElement('input');
       inputPrice.type = 'text';
       inputPrice.value = formatNumber(precio);
+      inputPrice.className = 'item-price';
       inputPrice.placeholder = "0,00";
       inputPrice.style.textAlign = 'right';
       inputPrice.addEventListener('focus', handleInputFocus);
@@ -1615,9 +1633,23 @@
       tdPrice.appendChild(inputPrice);
       tr.appendChild(tdPrice);
 
+      // Descuento (%)
+      const tdDiscount = document.createElement('td');
+      const inputDiscount = document.createElement('input');
+      inputDiscount.type = 'number';
+      inputDiscount.value = descuento;
+      inputDiscount.className = 'item-discount';
+      inputDiscount.placeholder = "0";
+      inputDiscount.min = '0';
+      inputDiscount.max = '100';
+      inputDiscount.style.textAlign = 'center';
+      tdDiscount.appendChild(inputDiscount);
+      tr.appendChild(tdDiscount);
+
       // Alicuota IVA
       const tdAlic = document.createElement('td');
       const selectAlic = document.createElement('select');
+      selectAlic.className = 'item-vat';
       taxRates.forEach(rate => {
         const opt = document.createElement('option');
         opt.value = rate.id;
@@ -1659,7 +1691,8 @@
       const updateCalculations = () => {
         const qty = parseFloat(inputCant.value) || 0;
         const up = parseFormattedNumber(inputPrice.value);
-        const net = qty * up;
+        const itemDiscount = parseFloat(inputDiscount.value) || 0;
+        const net = qty * up * (1 - itemDiscount / 100);
         let vatRate = 0;
 
         if (selectAlic.value === "3") vatRate = 0.21;
@@ -1675,6 +1708,7 @@
 
       inputCant.addEventListener('input', updateCalculations);
       inputPrice.addEventListener('input', updateCalculations);
+      inputDiscount.addEventListener('input', updateCalculations);
       selectAlic.addEventListener('change', updateCalculations);
 
       itemsTbody.appendChild(tr);
@@ -1691,17 +1725,16 @@
     function calculateTotals() {
       let grandNet = 0;
       let grandVat = 0;
-      let grandTotal = 0;
 
       const rows = itemsTbody.querySelectorAll('tr');
       rows.forEach(tr => {
-        const inputs = tr.querySelectorAll('input');
-        const select = tr.querySelector('select');
-        const qty = parseFloat(inputs[1].value) || 0;
-        const up = parseFormattedNumber(inputs[2].value);
-        const net = qty * up;
+        const qty = parseFloat(tr.querySelector('.item-qty').value) || 0;
+        const up = parseFormattedNumber(tr.querySelector('.item-price').value);
+        const itemDiscount = parseFloat(tr.querySelector('.item-discount').value) || 0;
+        const net = qty * up * (1 - itemDiscount / 100);
+        
         let vatRate = 0;
-
+        const select = tr.querySelector('.item-vat');
         if (select.value === "3") vatRate = 0.21;
         else if (select.value === "2") vatRate = 0.105;
         else if (select.value === "4") vatRate = 0.27;
@@ -1710,7 +1743,6 @@
         
         grandNet += net;
         grandVat += vat;
-        grandTotal += (net + vat);
       });
 
       // Sumar percepciones
@@ -1720,13 +1752,18 @@
         grandPerceptions += parseFormattedNumber(input.value);
       });
 
-      grandTotal += grandPerceptions;
+      const globalDiscountPct = parseFloat(document.getElementById('global-discount').value) || 0;
+      const discountedNet = grandNet * (1 - globalDiscountPct / 100);
+      const discountedVat = grandVat * (1 - globalDiscountPct / 100);
+      const grandTotal = discountedNet + discountedVat + grandPerceptions;
 
-      document.getElementById('lbl-neto').textContent = `$ ${formatNumber(grandNet)}`;
-      document.getElementById('lbl-iva').textContent = `$ ${formatNumber(grandVat)}`;
+      document.getElementById('lbl-neto').textContent = `$ ${formatNumber(discountedNet)}`;
+      document.getElementById('lbl-iva').textContent = `$ ${formatNumber(discountedVat)}`;
       document.getElementById('lbl-percepciones').textContent = `$ ${formatNumber(grandPerceptions)}`;
       document.getElementById('lbl-total').textContent = `$ ${formatNumber(grandTotal)}`;
     }
+
+    document.getElementById('global-discount').addEventListener('input', calculateTotals);
 
     // Settings Modal triggers
     btnSettings.addEventListener('click', () => {
@@ -2153,12 +2190,11 @@
       let nonZeroIvaForNoOficial = false;
 
       rows.forEach(tr => {
-        const inputs = tr.querySelectorAll('input');
-        const select = tr.querySelector('select');
-        const concepto = inputs[0].value.trim();
-        const cantidad = parseFloat(inputs[1].value) || 0;
-        const precioUnitario = parseFormattedNumber(inputs[2].value);
-        const alicuotaId = select.value;
+        const concepto = tr.querySelector('.item-concept').value.trim();
+        const cantidad = parseFloat(tr.querySelector('.item-qty').value) || 0;
+        const precioUnitario = parseFormattedNumber(tr.querySelector('.item-price').value);
+        const itemDiscount = parseFloat(tr.querySelector('.item-discount').value) || 0;
+        const alicuotaId = tr.querySelector('.item-vat').value;
 
         if (!concepto || cantidad <= 0 || precioUnitario <= 0) {
           missingFields = true;
@@ -2168,11 +2204,17 @@
           nonZeroIvaForNoOficial = true;
         }
 
+        // Combine discounts:
+        // CombinedPct = 100 * (1 - (1 - ItemDiscount/100) * (1 - GlobalDiscount/100))
+        const globalDiscount = parseFloat(document.getElementById('global-discount').value) || 0;
+        const combinedDiscount = 100 * (1 - (1 - itemDiscount / 100) * (1 - globalDiscount / 100));
+
         items.push({
           concepto,
           cantidad,
           precioUnitario,
-          alicuotaId
+          alicuotaId,
+          porcBonificacion: combinedDiscount > 0 ? Number(combinedDiscount.toFixed(4)) : ""
         });
       });
 
@@ -2243,7 +2285,13 @@
             jurisdiccionId: parseInt(jurisdiccionId, 10),
             items,
             perceptions,
-            autoTransition
+            autoTransition,
+            observaciones: document.getElementById('invoice-observations').value.trim(),
+            file: selectedFileBase64 ? {
+              base64: selectedFileBase64,
+              name: selectedFileName,
+              type: selectedFileType
+            } : null
           })
         });
 
@@ -2746,6 +2794,16 @@
       const file = e.target.files[0];
       if (!file) return;
 
+      selectedFileName = file.name;
+      selectedFileType = file.type;
+      selectedFileBase64 = ""; // Reset until read
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        selectedFileBase64 = evt.target.result.split(',')[1];
+      };
+      reader.readAsDataURL(file);
+
       ocrStatusContainer.style.display = 'flex';
       ocrStatusText.textContent = "Leyendo archivo e iniciando procesamiento OCR...";
 
@@ -3064,8 +3122,69 @@
       if (data.neto === 0 && data.total > 0) data.neto = data.total - data.iva;
       if (data.iva === 0 && data.total > data.neto) data.iva = data.total - data.neto;
 
-      // --- TRIPLE-TIERED ITEMS PARSING STRATEGY ---
-      const ignoreKeywords = ["total", "subtotal", "neto", "iva", "i.v.a.", "percep", "perc.", "cae", "cuit", "ing. brutos", "inicio de actividad", "tel:", "cliente:", "dirección:", "localidad:", "c.u.i.t.", "precio", "descripción", "descripcion", "cantidad", "concepto", "pago", "vencimiento", "fecha", "nro", "nº", "número", "factura", "original", "duplicado", "remito", "domicilio"];
+      // --- LINE-BY-LINE EXTRACTION STRATEGY ---
+      const parsedItems = [];
+      const parsedPerceptions = [];
+      const lineIgnoreKeywords = ["total", "subtotal", "neto", "iva", "i.v.a.", "percep", "perc.", "cae", "cuit", "ing. brutos", "inicio de actividad", "tel:", "cliente:", "dirección:", "localidad:", "c.u.i.t.", "precio", "descripción", "descripcion", "cantidad", "concepto", "pago", "vencimiento", "fecha", "nro", "nº", "número", "factura", "original", "duplicado", "remito", "domicilio"];
+      const customIgnore = (rules && rules.ignoreKeywords) || [];
+      const finalItemIgnore = [...lineIgnoreKeywords, ...customIgnore];
+
+      ocrLines.forEach(line => {
+        const lineTrimmed = line.trim();
+        const match = lineTrimmed.match(/^([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ].*?)\s+[$sS]?\s*(\d+(?:[\.,]\d{3})*[\.,]\d{2})\s*$/);
+        if (match) {
+          const label = match[1].trim();
+          let amountStr = match[2];
+          if (amountStr.includes(",") && amountStr.includes(".")) {
+            amountStr = amountStr.replace(/\./g, "").replace(",", ".");
+          } else if (amountStr.includes(",")) {
+            amountStr = amountStr.replace(",", ".");
+          }
+          const val = parseFloat(amountStr) || 0;
+          const labelLower = label.toLowerCase();
+          
+          if (labelLower.includes("percepcion") || labelLower.includes("percepción") || labelLower.includes("perc.")) {
+            let detectedTaxType = "iibb";
+            if (labelLower.includes("iva")) detectedTaxType = "iva";
+            else if (labelLower.includes("gan") || labelLower.includes("ganancia")) detectedTaxType = "ganancias";
+            else if (labelLower.includes("int") || labelLower.includes("interno")) detectedTaxType = "internos";
+            
+            parsedPerceptions.push({
+              taxType: detectedTaxType,
+              rawLabel: label,
+              importe: val
+            });
+          } else if (labelLower.includes("subtotal") || labelLower.includes("neto") || labelLower.includes("total") || labelLower.includes("i.v.a.") || labelLower.includes("iva insc.")) {
+            if (labelLower.includes("subtotal") || labelLower.includes("neto")) {
+              if (data.neto === 0) data.neto = val;
+            }
+            if (labelLower.includes("iva")) {
+              if (data.iva === 0) data.iva = val;
+            }
+            if (labelLower.includes("total")) {
+              if (data.total === 0) data.total = val;
+            }
+          } else {
+            const shouldIgnore = finalItemIgnore.some(kw => labelLower.includes(kw.toLowerCase()));
+            if (!shouldIgnore && val > 0) {
+              parsedItems.push({
+                concepto: label,
+                cantidad: 1,
+                precioUnitario: val
+              });
+            }
+          }
+        }
+      });
+
+      if (parsedItems.length > 0) {
+        data.items = parsedItems;
+        if (parsedPerceptions.length > 0) {
+          data.perceptions = parsedPerceptions;
+        }
+      } else {
+        // --- TRIPLE-TIERED ITEMS PARSING STRATEGY ---
+        const ignoreKeywords = ["total", "subtotal", "neto", "iva", "i.v.a.", "percep", "perc.", "cae", "cuit", "ing. brutos", "inicio de actividad", "tel:", "cliente:", "dirección:", "localidad:", "c.u.i.t.", "precio", "descripción", "descripcion", "cantidad", "concepto", "pago", "vencimiento", "fecha", "nro", "nº", "número", "factura", "original", "duplicado", "remito", "domicilio"];
       const customIgnore = (rules && rules.ignoreKeywords) || [];
       const finalItemIgnore = [...ignoreKeywords, ...customIgnore];
 
@@ -3219,6 +3338,7 @@
             }
           }
         }
+      }
       }
 
        // Fallback row
