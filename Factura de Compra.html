@@ -315,7 +315,7 @@
       gap: 6px;
       margin-top: 6px;
       font-size: 12px;
-      pointer-events: none;
+      pointer-events: auto;
     }
 
     .autocomplete-item {
@@ -1273,6 +1273,40 @@
     let selectedSupplierObj = null;
     let currentZoom = 100;
 
+    const PROVINCES_MAP = {
+      1: "CABA",
+      2: "Buenos Aires",
+      3: "Catamarca",
+      4: "Córdoba",
+      5: "Corrientes",
+      6: "Chaco",
+      7: "Chubut",
+      8: "Entre Ríos",
+      9: "Formosa",
+      10: "Jujuy",
+      11: "La Pampa",
+      12: "La Rioja",
+      13: "Mendoza",
+      14: "Misiones",
+      15: "Neuquén",
+      16: "Río Negro",
+      17: "Salta",
+      18: "San Juan",
+      19: "San Luis",
+      20: "Santa Cruz",
+      21: "Santa Fe",
+      22: "Santiago del Estero",
+      23: "Tierra del Fuego",
+      24: "Tucumán"
+    };
+
+    function formatNumber(value) {
+      if (value === undefined || value === null || isNaN(value)) value = 0;
+      const parts = parseFloat(value).toFixed(2).split('.');
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+      return parts.join(',');
+    }
+
     // Configure PDF.js Worker
     if (window.pdfjsLib) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
@@ -1556,7 +1590,7 @@
         const vat = net * vatRate;
         const total = net + vat;
 
-        tdSub.textContent = `$ ${total.toFixed(2)}`;
+        tdSub.textContent = `$ ${formatNumber(total)}`;
         calculateTotals();
       };
 
@@ -1609,10 +1643,10 @@
 
       grandTotal += grandPerceptions;
 
-      document.getElementById('lbl-neto').textContent = `$ ${grandNet.toFixed(2)}`;
-      document.getElementById('lbl-iva').textContent = `$ ${grandVat.toFixed(2)}`;
-      document.getElementById('lbl-percepciones').textContent = `$ ${grandPerceptions.toFixed(2)}`;
-      document.getElementById('lbl-total').textContent = `$ ${grandTotal.toFixed(2)}`;
+      document.getElementById('lbl-neto').textContent = `$ ${formatNumber(grandNet)}`;
+      document.getElementById('lbl-iva').textContent = `$ ${formatNumber(grandVat)}`;
+      document.getElementById('lbl-percepciones').textContent = `$ ${formatNumber(grandPerceptions)}`;
+      document.getElementById('lbl-total').textContent = `$ ${formatNumber(grandTotal)}`;
     }
 
     // Settings Modal triggers
@@ -1891,29 +1925,62 @@
     // Tooltip validation event listeners
     const supplierTooltip = document.getElementById('supplier-tooltip');
     const tooltipContent = document.getElementById('tooltip-content');
+    let tooltipTimeout = null;
 
-    supplierInput.addEventListener('mouseenter', () => {
+    function showTooltip() {
+      if (tooltipTimeout) clearTimeout(tooltipTimeout);
       if (selectedSupplierObj) {
-        const nombre = selectedSupplierObj.razonSocial || selectedSupplierObj.nombre || 'S/D';
+        const nombre = selectedSupplierObj.razonSocial || 'S/D';
+        const nombreYiqi = selectedSupplierObj.nombre || 'S/D';
         const cuit = selectedSupplierObj.cuit || 'S/D';
         const iva = selectedSupplierObj.ivaCondition || 'S/D';
-        const direccion = selectedSupplierObj.direccion || selectedSupplierObj.address || 'S/D';
-        const localidad = selectedSupplierObj.localidad || selectedSupplierObj.city || 'S/D';
+        const direccion = selectedSupplierObj.direccion || selectedSupplierObj.address || selectedSupplierObj.domicilio || 'S/D';
+        const localidad = selectedSupplierObj.localidad || 'S/D';
         
+        let provincia = 'S/D';
+        if (selectedSupplierObj.provinciaId) {
+          provincia = PROVINCES_MAP[selectedSupplierObj.provinciaId] || selectedSupplierObj.provinciaId;
+        } else if (selectedSupplierObj.provincia) {
+          provincia = selectedSupplierObj.provincia;
+        }
+
+        const yiqiUrl = `https://me.yiqi.com.ar/view/CLIENTE?schemaId=1491#/${selectedSupplierObj.id}`;
+
         tooltipContent.innerHTML = `
+          <div><strong>ID YiQi:</strong> <span style="color: var(--primary); font-weight: 600;">#${selectedSupplierObj.id}</span></div>
           <div><strong>Razón Social:</strong> <span>${nombre}</span></div>
+          <div><strong>Nombre YiQi:</strong> <span>${nombreYiqi}</span></div>
           <div><strong>CUIT:</strong> <span>${cuit}</span></div>
           <div><strong>Condición IVA:</strong> <span style="color: var(--warning); font-weight: 500;">${iva}</span></div>
-          <div><strong>Dirección:</strong> <span>${direccion}</span></div>
+          <div><strong>Provincia:</strong> <span>${provincia}</span></div>
           <div><strong>Localidad:</strong> <span>${localidad}</span></div>
+          <div><strong>Dirección:</strong> <span>${direccion}</span></div>
+          <div style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px; display: flex; justify-content: flex-end; pointer-events: auto;">
+            <a href="${yiqiUrl}" target="_blank" class="btn btn-primary" style="padding: 6px 12px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; border-radius: 6px; background: var(--primary); color: white; cursor: pointer; pointer-events: auto;">
+              <i data-lucide="external-link" style="width: 12px; height: 12px;"></i>
+              Ver en YiQi
+            </a>
+          </div>
         `;
         supplierTooltip.style.display = 'flex';
+        lucide.createIcons();
       }
-    });
+    }
 
-    supplierInput.addEventListener('mouseleave', () => {
-      supplierTooltip.style.display = 'none';
+    function hideTooltip() {
+      if (tooltipTimeout) clearTimeout(tooltipTimeout);
+      tooltipTimeout = setTimeout(() => {
+        supplierTooltip.style.display = 'none';
+      }, 200);
+    }
+
+    supplierInput.addEventListener('mouseenter', showTooltip);
+    supplierInput.addEventListener('mouseleave', hideTooltip);
+
+    supplierTooltip.addEventListener('mouseenter', () => {
+      if (tooltipTimeout) clearTimeout(tooltipTimeout);
     });
+    supplierTooltip.addEventListener('mouseleave', hideTooltip);
 
     // Save Invoice Call
     btnSaveInvoice.addEventListener('click', async () => {
@@ -2740,49 +2807,37 @@
       while ((posMatch = posRegex.exec(text)) !== null) {
         const posStr = posMatch[1];
         const numStr = posMatch[2];
-        
         if (posStr === numStr) continue;
         if (posStr.length <= 2 && numStr.length === 4 && (numStr.startsWith("20") || numStr.startsWith("19"))) continue;
-        
-        // Check if part of CUIT
         const nextCharIdx = posMatch.index + posMatch[0].length;
         const nextText = text.substring(nextCharIdx, nextCharIdx + 5);
         if (/^-\d\b/.test(nextText)) continue;
-        
         let score = 0;
         if (numStr.length === 8) score += 10;
         if (posStr.length === 4 || posStr.length === 5) score += 5;
-        
-        // Rules override for digits preference
         if (rules && rules.preferDigits && numStr.length === rules.preferDigits) {
           score += 15;
         }
-
         const contextStart = Math.max(0, posMatch.index - 55);
         const contextEnd = Math.min(text.length, posMatch.index + posMatch[0].length + 55);
         const context = text.substring(contextStart, contextEnd).toLowerCase();
-        
         if (context.includes("factura") || context.includes("nro") || context.includes("nº") || context.includes("comp") || context.includes("num")) {
           score += 15;
         }
-
         const customIgnore = (rules && rules.ignoreKeywords) || [];
         const finalIgnoreList = ["tel", "tf", "phone", ...customIgnore];
-        const containsIgnore = finalIgnoreList.some(word => context.includes(word.toLowerCase()));
-        if (containsIgnore) {
-          score -= 30; // penalize heavily if matches any ignore keywords
+        if (finalIgnoreList.some(word => context.includes(word.toLowerCase()))) {
+          score -= 30;
         }
-
         posCandidates.push({ pos: posStr, number: numStr, score: score });
       }
-
       posCandidates.sort((a, b) => b.score - a.score);
       if (posCandidates.length > 0) {
         data.pos = posCandidates[0].pos;
         data.number = posCandidates[0].number;
       }
 
-      // 4. Date (with dot notation support)
+      // 4. Date
       const dateMatch = text.match(/\b(\d{2})[/\.-](\d{2})[/\.-](\d{4})\b/);
       if (dateMatch) {
         const [_, day, month, year] = dateMatch;
@@ -2810,8 +2865,9 @@
       if (data.neto === 0 && data.total > 0) data.neto = data.total - data.iva;
       if (data.iva === 0 && data.total > data.neto) data.iva = data.total - data.neto;
 
+      const ocrLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
       // 6. Perceptions
-      const ocrLines = text.split('\n');
       ocrLines.forEach(line => {
         const lineLower = line.toLowerCase();
         if (lineLower.includes("percep") || lineLower.includes("perc.")) {
@@ -2829,91 +2885,179 @@
               if (lineLower.includes("iva")) detectedTaxType = "iva";
               else if (lineLower.includes("gan") || lineLower.includes("ganancia")) detectedTaxType = "ganancias";
               else if (lineLower.includes("int") || lineLower.includes("interno")) detectedTaxType = "internos";
-              
-              data.perceptions.push({
-                taxType: detectedTaxType,
-                rawLabel: line.trim(),
-                importe: amount
-              });
+              data.perceptions.push({ taxType: detectedTaxType, rawLabel: line, importe: amount });
             }
           }
         }
       });
 
-      // 7. Items
-      const lines = text.split('\n');
-      
-      const forceService = rules && rules.isServiceInvoice === true;
-      
-      // First pass: try standard quantity + description + price + subtotal rows
-      if (!forceService) {
-        lines.forEach(line => {
-          const matchRow = line.match(/^\s*(\d+(?:[\.,]\d+)?)\s+([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ][a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s\d\-_\/\+\*\.\(\)%#ºª]+?)\s+(\d+(?:\.\d{3})*(?:[\.,]\d{2}))\s+(\d+(?:\.\d{3})*(?:[\.,]\d{2}))/);
-          if (matchRow) {
-            const qty = parseFloat(matchRow[1].replace(",", "."));
-            const desc = matchRow[2].trim();
-            let priceStr = matchRow[3];
-            if (priceStr.includes(",") && priceStr.includes(".")) {
-              priceStr = priceStr.replace(/\./g, "").replace(",", ".");
-            } else if (priceStr.includes(",")) {
-              priceStr = priceStr.replace(",", ".");
-            }
-            const price = parseFloat(priceStr) || 0;
-            if (qty > 0 && desc && price > 0) {
-              data.items.push({ concepto: desc, cantidad: qty, precioUnitario: price });
-            }
+      // --- TRIPLE-TIERED ITEMS PARSING STRATEGY ---
+      const ignoreKeywords = ["total", "subtotal", "neto", "iva", "i.v.a.", "percep", "perc.", "cae", "cuit", "ing. brutos", "inicio de actividad", "tel:", "cliente:", "dirección:", "localidad:", "c.u.i.t.", "precio", "descripción", "descripcion", "cantidad", "concepto", "pago", "vencimiento", "fecha", "nro", "nº", "número", "factura", "original", "duplicado", "remito", "domicilio"];
+      const customIgnore = (rules && rules.ignoreKeywords) || [];
+      const finalItemIgnore = [...ignoreKeywords, ...customIgnore];
+
+      // Collect all single amount lines
+      const amounts = [];
+      ocrLines.forEach(line => {
+        const amtMatch = line.match(/^\s*[$sS]?\s*(\d+(?:\.\d{3})*(?:[\.,]\d{2}))\s*$/);
+        if (amtMatch) {
+          let amountStr = amtMatch[1];
+          if (amountStr.includes(",") && amountStr.includes(".")) {
+            amountStr = amountStr.replace(/\./g, "").replace(",", ".");
+          } else if (amountStr.includes(",")) {
+            amountStr = amountStr.replace(",", ".");
           }
-        });
+          const amtVal = parseFloat(amountStr) || 0;
+          if (amtVal > 0) {
+            amounts.push(amtVal);
+          }
+        }
+      });
+
+      // Tier 1: Quantity Multiplication Check (for standard tabular layout)
+      const qtyItemLines = [];
+      ocrLines.forEach(line => {
+        const lineTrimmed = line.trim();
+        const qtyMatch = lineTrimmed.match(/^\s*(\d+(?:[\.,]\d+)?)\s+([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ].*)$/);
+        if (qtyMatch) {
+          const lineLower = lineTrimmed.toLowerCase();
+          const shouldIgnore = finalItemIgnore.some(kw => lineLower.includes(kw.toLowerCase()));
+          if (!shouldIgnore) {
+            qtyItemLines.push({
+              concepto: qtyMatch[2].trim(),
+              cantidad: parseFloat(qtyMatch[1].replace(",", ".")),
+              rawLine: lineTrimmed
+            });
+          }
+        }
+      });
+
+      let tier1Success = false;
+      if (qtyItemLines.length > 0 && amounts.length >= qtyItemLines.length * 2) {
+        const tempItems = [];
+        let amtIdx = 0;
+        let paired = true;
+        for (let i = 0; i < qtyItemLines.length; i++) {
+          const item = qtyItemLines[i];
+          const p1 = amounts[amtIdx];
+          const p2 = amounts[amtIdx + 1];
+          if (p1 && p2 && Math.abs(p2 - (item.cantidad * p1)) < 1.5) {
+            tempItems.push({
+              concepto: item.concepto,
+              cantidad: item.cantidad,
+              precioUnitario: p1
+            });
+            amtIdx += 2;
+          } else {
+            paired = false;
+            break;
+          }
+        }
+        if (paired && tempItems.length === qtyItemLines.length) {
+          data.items = tempItems;
+          tier1Success = true;
+        }
       }
 
-      // Second pass: if no items detected, search for text description + amount rows (for service/logistics invoices)
-      if (data.items.length === 0 || forceService) {
-        if (forceService) data.items = []; // Ensure empty before service pass
-        const ignoreKeywords = ["total", "subtotal", "neto", "iva", "i.v.a.", "percep", "perc.", "cae", "cuit", "ing. brutos", "inicio de actividad", "tel:", "cliente:", "dirección:", "localidad:", "c.u.i.t."];
-        const customIgnore = (rules && rules.ignoreKeywords) || [];
-        const finalItemIgnore = [...ignoreKeywords, ...customIgnore];
-        
-        lines.forEach(line => {
-          // Line format: [Description text] [Amount]
-          const matchRow = line.match(/^\s*([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ][a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s\d\-_\/\+\*\.\(\)%#ºª&]+?)\s+(\d+(?:\.\d{3})*(?:[\.,]\d{2}))\s*$/);
-          if (matchRow) {
-            const desc = matchRow[1].trim();
-            let amountStr = matchRow[2];
-            
-            // Check ignore list
-            const descLower = desc.toLowerCase();
-            const shouldIgnore = finalItemIgnore.some(kw => descLower.includes(kw.toLowerCase()));
+      // Tier 2: Consecutive Column Block matching (for service/column invoices)
+      if (!tier1Success) {
+        const descs = [];
+        ocrLines.forEach(line => {
+          const lineTrimmed = line.trim();
+          const isAmt = lineTrimmed.match(/^\s*[$sS]?\s*(\d+(?:\.\d{3})*(?:[\.,]\d{2}))\s*$/);
+          if (isAmt) return;
+
+          if (/[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]/.test(lineTrimmed)) {
+            const lineLower = lineTrimmed.toLowerCase();
+            const shouldIgnore = finalItemIgnore.some(kw => lineLower.includes(kw.toLowerCase()));
             if (shouldIgnore) return;
 
+            descs.push({
+              concepto: lineTrimmed,
+              cantidad: 1
+            });
+          }
+        });
+
+        let bestBlock = null;
+        let maxN = 0;
+        
+        const lineTypes = ocrLines.map(line => {
+          const lineTrimmed = line.trim();
+          if (!lineTrimmed) return 'I';
+          
+          const amtMatch = lineTrimmed.match(/^\s*[$sS]?\s*(\d+(?:\.\d{3})*(?:[\.,]\d{2}))\s*$/);
+          if (amtMatch) return 'A';
+          
+          if (/[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]/.test(lineTrimmed)) {
+            const lineLower = lineTrimmed.toLowerCase();
+            const shouldIgnore = finalItemIgnore.some(kw => lineLower.includes(kw.toLowerCase()));
+            if (shouldIgnore) return 'I';
+            return 'D';
+          }
+          return 'I';
+        });
+
+        for (let Q = 2; Q <= 15; Q++) {
+          for (let i = 0; i <= ocrLines.length - Q * 2; i++) {
+            let matchesD = true;
+            let matchesA = true;
+            for (let j = 0; j < Q; j++) {
+              if (lineTypes[i + j] !== 'D') matchesD = false;
+              if (lineTypes[i + Q + j] !== 'A') matchesA = false;
+            }
+            if (matchesD && matchesA) {
+              if (Q > maxN) {
+                maxN = Q;
+                bestBlock = { startIdx: i, length: Q };
+              }
+            }
+          }
+        }
+
+        if (bestBlock) {
+          for (let j = 0; j < bestBlock.length; j++) {
+            const descLine = ocrLines[bestBlock.startIdx + j];
+            const amtLine = ocrLines[bestBlock.startIdx + bestBlock.length + j];
+            
+            let amountStr = amtLine.replace(/^\s*[$sS]?\s*/, '');
             if (amountStr.includes(",") && amountStr.includes(".")) {
               amountStr = amountStr.replace(/\./g, "").replace(",", ".");
             } else if (amountStr.includes(",")) {
               amountStr = amountStr.replace(",", ".");
             }
-            const amount = parseFloat(amountStr) || 0;
-            
-            if (desc && amount > 0) {
-              data.items.push({
-                concepto: desc,
-                cantidad: 1,
-                precioUnitario: amount
-              });
-            }
-          }
-        });
-      }
+            const amtVal = parseFloat(amountStr) || 0;
 
-      // Fallback
-      if (data.items.length === 0) {
-        data.items.push({
-          concepto: "Concepto general (Carga OCR)",
-          cantidad: 1,
-          precioUnitario: data.neto || data.total || 0
-        });
-      }
+            data.items.push({
+              concepto: descLine.trim(),
+              cantidad: 1,
+              precioUnitario: amtVal
+            });
+           }
+         } else if (descs.length > 0 && amounts.length > 0) {
+           // Tier 3: simple 1-to-1 fallback
+           const alignLength = Math.min(descs.length, amounts.length);
+           for (let i = 0; i < alignLength; i++) {
+             data.items.push({
+               concepto: descs[i].concepto,
+               cantidad: descs[i].cantidad,
+               precioUnitario: amounts[i]
+             });
+           }
+         }
+       }
 
-      return data;
-    }
+       // Fallback row
+       if (data.items.length === 0) {
+         data.items.push({
+           concepto: "Concepto general (Carga OCR)",
+           cantidad: 1,
+           precioUnitario: data.neto || data.total || 0
+         });
+       }
+
+       return data;
+     }
 
     async function autoFillForm(data) {
       if (data.invoiceType) {
@@ -3115,7 +3259,7 @@
             <div>${item.invoiceTypeName}</div>
             <div style="font-size: 11px; color: var(--text-muted);">${item.posNumber}</div>
           </td>
-          <td style="padding: 12px; font-size: 13px; text-align: right; font-weight: 600; color: var(--success);">$ ${item.total.toFixed(2)}</td>
+          <td style="padding: 12px; font-size: 13px; text-align: right; font-weight: 600; color: var(--success);">$ ${formatNumber(item.total)}</td>
           <td style="padding: 12px; text-align: center;">
             <a href="https://me.yiqi.com.ar/instances/edit?entityId=660&schemaId=1491&id=${item.invoiceId}" target="_blank" class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px; gap: 4px;">
               <i data-lucide="external-link" style="width: 12px; height: 12px;"></i>
