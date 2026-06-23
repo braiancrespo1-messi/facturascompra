@@ -13,6 +13,16 @@
   <!-- PDF.js for client-side PDF processing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <style>
+    /* Hide up/down spin arrows for numeric inputs */
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type=number] {
+      -moz-appearance: textfield;
+    }
+
     /* Design System Tokens */
     :root {
       --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
@@ -817,8 +827,11 @@
               <span id="lbl-iva">$ 0.00</span>
             </div>
             <div class="summary-row" style="align-items: center;">
-              <span>Dto. Global (%):</span>
-              <input type="number" id="global-discount" value="0" min="0" max="100" style="width: 70px; text-align: right; padding: 4px; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; background: rgba(15,23,42,0.3); color: var(--text-main); font-weight: 600; font-size: 13px;">
+              <span>Dto. Global:</span>
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <input type="number" id="global-discount" value="0" min="0" max="100" style="width: 55px; text-align: right; padding: 4px; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; background: rgba(15,23,42,0.3); color: var(--text-main); font-weight: 600; font-size: 13px;">
+                <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">%</span>
+              </div>
             </div>
             <div class="summary-row" id="summary-row-perceptions">
               <span>Percepciones:</span>
@@ -1635,6 +1648,12 @@
 
       // Descuento (%)
       const tdDiscount = document.createElement('td');
+      const discountWrapper = document.createElement('div');
+      discountWrapper.style.display = 'flex';
+      discountWrapper.style.alignItems = 'center';
+      discountWrapper.style.justifyContent = 'center';
+      discountWrapper.style.gap = '4px';
+
       const inputDiscount = document.createElement('input');
       inputDiscount.type = 'number';
       inputDiscount.value = descuento;
@@ -1642,8 +1661,22 @@
       inputDiscount.placeholder = "0";
       inputDiscount.min = '0';
       inputDiscount.max = '100';
+      inputDiscount.style.width = '45px';
       inputDiscount.style.textAlign = 'center';
-      tdDiscount.appendChild(inputDiscount);
+      inputDiscount.style.border = '1px solid rgba(255,255,255,0.1)';
+      inputDiscount.style.borderRadius = '4px';
+      inputDiscount.style.background = 'rgba(15,23,42,0.3)';
+      inputDiscount.style.color = 'var(--text-main)';
+      inputDiscount.style.padding = '4px 2px';
+
+      const percentSpan = document.createElement('span');
+      percentSpan.style.fontSize = '12px';
+      percentSpan.style.color = 'var(--text-muted)';
+      percentSpan.textContent = '%';
+
+      discountWrapper.appendChild(inputDiscount);
+      discountWrapper.appendChild(percentSpan);
+      tdDiscount.appendChild(discountWrapper);
       tr.appendChild(tdDiscount);
 
       // Alicuota IVA
