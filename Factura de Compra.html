@@ -2038,37 +2038,45 @@
       
       if (currentZoom === 100) {
         if (container) {
+          container.style.display = 'flex';
           container.style.justifyContent = 'center';
           container.style.alignItems = 'flex-start';
           container.style.cursor = 'default';
         }
         if (canvas) {
           canvas.style.width = '';
+          canvas.style.height = '';
           canvas.style.maxWidth = '100%';
+          canvas.style.margin = '0 auto';
           canvas.style.userSelect = 'none';
           canvas.style.pointerEvents = 'none';
         }
         if (img) {
           img.style.width = '';
+          img.style.height = '';
           img.style.maxWidth = '100%';
+          img.style.margin = '0 auto';
           img.style.userSelect = 'none';
           img.style.pointerEvents = 'none';
         }
       } else {
         if (container) {
-          container.style.justifyContent = 'flex-start';
-          container.style.alignItems = 'flex-start';
+          container.style.display = 'block';
           container.style.cursor = 'grab';
         }
         if (canvas) {
           canvas.style.width = `${currentZoom}%`;
+          canvas.style.height = 'auto';
           canvas.style.maxWidth = 'none';
+          canvas.style.margin = '0 auto';
           canvas.style.userSelect = 'none';
           canvas.style.pointerEvents = 'none';
         }
         if (img) {
           img.style.width = `${currentZoom}%`;
+          img.style.height = 'auto';
           img.style.maxWidth = 'none';
+          img.style.margin = '0 auto';
           img.style.userSelect = 'none';
           img.style.pointerEvents = 'none';
         }
