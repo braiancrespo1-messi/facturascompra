@@ -2012,10 +2012,14 @@
         if (canvas) {
           canvas.style.width = '';
           canvas.style.maxWidth = '100%';
+          canvas.style.userSelect = 'none';
+          canvas.style.pointerEvents = 'none';
         }
         if (img) {
           img.style.width = '';
           img.style.maxWidth = '100%';
+          img.style.userSelect = 'none';
+          img.style.pointerEvents = 'none';
         }
       } else {
         if (container) {
@@ -2026,10 +2030,14 @@
         if (canvas) {
           canvas.style.width = `${currentZoom}%`;
           canvas.style.maxWidth = 'none';
+          canvas.style.userSelect = 'none';
+          canvas.style.pointerEvents = 'none';
         }
         if (img) {
           img.style.width = `${currentZoom}%`;
           img.style.maxWidth = 'none';
+          img.style.userSelect = 'none';
+          img.style.pointerEvents = 'none';
         }
       }
     }
@@ -2071,8 +2079,37 @@
       viewerContainer.scrollTop = scrollTop - walkY;
     });
 
+    // Zoom-to-cursor using mouse wheel
+    viewerContainer.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      
+      let newZoom = currentZoom;
+      if (e.deltaY < 0) {
+        newZoom = Math.min(400, currentZoom + 15);
+      } else {
+        newZoom = Math.max(100, currentZoom - 15);
+      }
+      
+      if (newZoom !== currentZoom) {
+        const rect = viewerContainer.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        const contentX = mouseX + viewerContainer.scrollLeft;
+        const contentY = mouseY + viewerContainer.scrollTop;
+        
+        const oldZoom = currentZoom;
+        currentZoom = newZoom;
+        applyZoom();
+        
+        const ratio = currentZoom / oldZoom;
+        viewerContainer.scrollLeft = contentX * ratio - mouseX;
+        viewerContainer.scrollTop = contentY * ratio - mouseY;
+      }
+    }, { passive: false });
+
     document.getElementById('btn-zoom-in').addEventListener('click', () => {
-      currentZoom = Math.min(250, currentZoom + 25);
+      currentZoom = Math.min(400, currentZoom + 25);
       applyZoom();
     });
 
