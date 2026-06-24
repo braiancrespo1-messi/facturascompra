@@ -1238,6 +1238,23 @@
     </div>
   </div>
 
+  <!-- Custom Confirmation Modal -->
+  <div id="confirm-modal" class="modal-overlay">
+    <div class="modal" style="max-width: 400px; padding: 24px;">
+      <div class="modal-body" style="padding: 0; gap: 16px; align-items: center; text-align: center;">
+        <div class="status-icon-container status-icon-warning" style="background: rgba(245, 158, 11, 0.1); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.2); width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+          <i data-lucide="help-circle" style="width: 28px; height: 28px;"></i>
+        </div>
+        <h3 id="confirm-title" style="font-size: 18px; font-weight: 700; color: var(--text-main); margin: 0;">¿Estás seguro?</h3>
+        <p id="confirm-message" style="font-size: 14px; color: var(--text-muted); line-height: 1.5; margin: 0;">¿Deseas realizar esta acción?</p>
+        <div style="display: flex; gap: 12px; width: 100%; margin-top: 8px;">
+          <button id="btn-confirm-cancel" class="btn btn-secondary" style="flex: 1; justify-content: center; height: 40px; margin: 0;">Cancelar</button>
+          <button id="btn-confirm-accept" class="btn btn-danger" style="flex: 1; justify-content: center; height: 40px; background: var(--danger); margin: 0;">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     // Auto-migrate old placeholder URLs in localStorage
     if (localStorage.getItem('tmc_supplier_search_url') && localStorage.getItem('tmc_supplier_search_url').includes('vb5plcbgra-uc')) {
@@ -1453,6 +1470,41 @@
       statusMessage.innerHTML = message;
       statusModal.style.display = 'flex';
       lucide.createIcons();
+    }
+
+    // Custom Styled Confirmation Dialog
+    function showCustomConfirm(message, title = "¿Estás seguro?") {
+      return new Promise((resolve) => {
+        const modal = document.getElementById('confirm-modal');
+        const titleEl = document.getElementById('confirm-title');
+        const msgEl = document.getElementById('confirm-message');
+        const btnCancel = document.getElementById('btn-confirm-cancel');
+        const btnAccept = document.getElementById('btn-confirm-accept');
+
+        titleEl.textContent = title;
+        msgEl.textContent = message;
+        modal.style.display = 'flex';
+        lucide.createIcons();
+
+        function cleanup() {
+          modal.style.display = 'none';
+          btnCancel.removeEventListener('click', onCancel);
+          btnAccept.removeEventListener('click', onAcceptClick);
+        }
+
+        function onCancel() {
+          cleanup();
+          resolve(false);
+        }
+
+        function onAcceptClick() {
+          cleanup();
+          resolve(true);
+        }
+
+        btnCancel.addEventListener('click', onCancel);
+        btnAccept.addEventListener('click', onAcceptClick);
+      });
     }
 
     function updateLockStatesBasedOnSupplierIva() {
@@ -1940,7 +1992,8 @@
 
         tr.querySelector('.btn-delete-template').addEventListener('click', async (e) => {
           const cuit = e.currentTarget.dataset.cuit;
-          if (confirm(`¿Estás seguro de que deseas eliminar la plantilla OCR para el CUIT ${cuit}?`)) {
+          const confirmed = await showCustomConfirm(`¿Estás seguro de que deseas eliminar la plantilla OCR para el CUIT ${cuit}?`, "Eliminar Plantilla");
+          if (confirmed) {
             try {
               const delRes = await fetch(config.eliminarReglaOcrUrl, {
                 method: "POST",
@@ -3714,16 +3767,18 @@
       loadHistory();
     }
 
-    btnClearHistory.addEventListener('click', () => {
-      if (confirm("¿Estás seguro de que deseas limpiar el historial de ingestas?")) {
+    btnClearHistory.addEventListener('click', async () => {
+      const confirmed = await showCustomConfirm("¿Estás seguro de que deseas limpiar el historial de ingestas?", "Limpiar Historial");
+      if (confirmed) {
         localStorage.removeItem('tmc_invoice_history');
         loadHistory();
       }
     });
 
     // Limpiar Todo (Formulario y Comprobante)
-    document.getElementById('btn-clear-all').addEventListener('click', () => {
-      if (confirm("¿Estás seguro de que deseas limpiar todos los datos del formulario y el comprobante cargado?")) {
+    document.getElementById('btn-clear-all').addEventListener('click', async () => {
+      const confirmed = await showCustomConfirm("¿Estás seguro de que deseas limpiar todos los datos del formulario y el comprobante cargado?", "Confirmar Reinicio");
+      if (confirmed) {
         // 1. Reset OCR file input
         ocrFileInput.value = '';
 
