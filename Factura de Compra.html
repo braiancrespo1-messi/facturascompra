@@ -624,34 +624,33 @@
       </div>
     </header>
 
-    <!-- OCR Capture Section -->
-    <div class="card" id="ocr-capture-card" style="border: 1px dashed rgba(59, 130, 246, 0.4); background: rgba(30, 41, 59, 0.4);">
-      <div class="card-header" style="border: none; padding-bottom: 0;">
-        <span class="card-title">
+    <!-- OCR & Control Section -->
+    <div class="card" id="ocr-capture-card" style="border: 1px dashed rgba(59, 130, 246, 0.4); background: rgba(30, 41, 59, 0.4); padding: 12px 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <span class="card-title" style="margin: 0; display: flex; align-items: center; gap: 8px;">
           <i data-lucide="scan-line" style="width: 18px; height: 18px; color: var(--primary);"></i>
-          Lectura Rápida OCR — Ingesta Inteligente (Cloud Vision)
+          Lectura Rápida OCR — Ingesta Inteligente
         </span>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <!-- Subir Archivo button -->
+          <label id="btn-ocr-upload-label" class="btn btn-secondary" style="padding: 8px 16px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; border-radius: 8px; cursor: pointer; border: 1px dashed rgba(255, 255, 255, 0.2); background: rgba(15, 23, 42, 0.4); margin: 0; height: 38px;">
+            <i data-lucide="upload-cloud" style="width: 16px; height: 16px; color: var(--success);"></i>
+            Subir Archivo (PDF / Imagen)
+            <input type="file" id="ocr-file-input" accept="image/*,application/pdf" style="display: none;">
+          </label>
+          
+          <!-- Limpiar Todo button -->
+          <button type="button" id="btn-clear-all" class="btn btn-danger" style="padding: 8px 16px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; border-radius: 8px; height: 38px;">
+            <i data-lucide="rotate-ccw" style="width: 16px; height: 16px;"></i>
+            Limpiar Todo
+          </button>
+        </div>
       </div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 12px; align-items: center;">
-        <!-- Tomar Foto button -->
-        <button id="btn-ocr-camera" class="btn btn-primary" style="height: 70px; font-size: 16px; font-weight: 700; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; border-radius: 12px; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); border: 1px solid rgba(255, 255, 255, 0.15);">
-          <i data-lucide="camera" style="width: 24px; height: 24px;"></i>
-          Tomar Foto (Cámara)
-        </button>
-        <!-- Subir Archivo button -->
-        <label id="btn-ocr-upload-label" class="btn btn-secondary" style="height: 70px; font-size: 16px; font-weight: 700; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; border-radius: 12px; cursor: pointer; border: 1px dashed rgba(255, 255, 255, 0.2); background: rgba(15, 23, 42, 0.4); margin: 0;">
-          <i data-lucide="upload-cloud" style="width: 24px; height: 24px; color: var(--success);"></i>
-          Subir Archivo (PDF / Imagen)
-          <input type="file" id="ocr-file-input" accept="image/*,application/pdf" style="display: none;">
-        </label>
-        <!-- Camera capture input for mobile devices (directly activates camera) -->
-        <input type="file" id="ocr-camera-input" accept="image/*" capture="environment" style="display: none;">
-      </div>
-      <div id="ocr-status-container" style="display: none; margin-top: 12px; align-items: center; gap: 12px; font-size: 14px; background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: var(--card-border);">
-        <svg class="spinner" viewBox="0 0 50 50" style="width: 20px; height: 20px; color: var(--primary);">
+      <div id="ocr-status-container" style="display: none; margin-top: 12px; align-items: center; gap: 12px; font-size: 13px; background: rgba(15, 23, 42, 0.6); padding: 8px 12px; border-radius: 6px; border: var(--card-border);">
+        <svg class="spinner" viewBox="0 0 50 50" style="width: 16px; height: 16px; color: var(--primary);">
           <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle>
         </svg>
-        <span id="ocr-status-text">Procesando archivo con Google Cloud Vision...</span>
+        <span id="ocr-status-text">Procesando archivo...</span>
       </div>
     </div>
 
@@ -1021,7 +1020,7 @@
             <input type="text" id="cfg-delete-rule-url" value="https://us-central1-tmc-backend-2f5c4.cloudfunctions.net/eliminarReglaOcrProxy">
           </div>
           <div class="form-group">
-            <label for="cfg-vision-key">Google Cloud Vision API Key</label>
+            <label for="cfg-vision-key">API Key del Motor OCR</label>
             <input type="text" id="cfg-vision-key" placeholder="AIzaSy...">
           </div>
         </div>
@@ -1307,8 +1306,6 @@
 
     // OCR Elements
     const ocrFileInput = document.getElementById('ocr-file-input');
-    const ocrCameraInput = document.getElementById('ocr-camera-input');
-    const btnOcrCamera = document.getElementById('btn-ocr-camera');
     const ocrStatusContainer = document.getElementById('ocr-status-container');
     const ocrStatusText = document.getElementById('ocr-status-text');
 
@@ -2886,7 +2883,7 @@
     async function analyzeImageWithVision(base64Image) {
       const visionKey = localStorage.getItem('tmc_vision_api_key') || "";
       if (!visionKey) {
-        throw new Error("Por favor, abre la configuración (icono de engranaje ⚙️ arriba a la derecha) e ingresa tu API Key de Google Cloud Vision para habilitar la lectura OCR.");
+        throw new Error("Por favor, abre la configuración (icono de engranaje ⚙️ arriba a la derecha) e ingresa tu API Key del Motor OCR para habilitar la lectura OCR.");
       }
       
       const url = `https://vision.googleapis.com/v1/images:annotate?key=${visionKey}`;
@@ -2914,7 +2911,7 @@
       });
       
       if (!res.ok) {
-        throw new Error(`Error en Google Cloud Vision API: HTTP ${res.status}`);
+        throw new Error(`Error en el motor OCR: HTTP ${res.status}`);
       }
       
       return await res.json();
@@ -2953,7 +2950,7 @@
           throw new Error("Formato de archivo no soportado. Por favor use PDF o imágenes.");
         }
 
-        ocrStatusText.textContent = "Enviando imagen a Google Cloud Vision API...";
+        ocrStatusText.textContent = "Procesando lectura OCR...";
         const visionResult = await analyzeImageWithVision(base64Image);
         
         if (visionResult.responses && visionResult.responses[0] && visionResult.responses[0].fullTextAnnotation) {
@@ -3584,11 +3581,7 @@
     }
 
     // Connect OCR UI events
-    btnOcrCamera.addEventListener('click', () => {
-      ocrCameraInput.click();
-    });
     ocrFileInput.addEventListener('change', handleOcrFileSelected);
-    ocrCameraInput.addEventListener('change', handleOcrFileSelected);
 
     // --- LÓGICA DE PERCEPCIONES (FRONTEND) ---
     const perceptionsTbody = document.getElementById('perceptions-tbody');
@@ -3725,6 +3718,74 @@
       if (confirm("¿Estás seguro de que deseas limpiar el historial de ingestas?")) {
         localStorage.removeItem('tmc_invoice_history');
         loadHistory();
+      }
+    });
+
+    // Limpiar Todo (Formulario y Comprobante)
+    document.getElementById('btn-clear-all').addEventListener('click', () => {
+      if (confirm("¿Estás seguro de que deseas limpiar todos los datos del formulario y el comprobante cargado?")) {
+        // 1. Reset OCR file input
+        ocrFileInput.value = '';
+
+        // 2. Reset file variables
+        selectedFileBase64 = "";
+        selectedFileName = "";
+        selectedFileType = "";
+
+        // 3. Reset Supplier state
+        supplierInput.value = '';
+        delete supplierInput.dataset.iva;
+        document.getElementById('selected-supplier-id').value = '';
+        selectedSupplierObj = null;
+        lastParsedCuit = "";
+        lastOcrResult = null;
+        document.getElementById('supplier-autocomplete').style.display = 'none';
+        document.getElementById('supplier-tooltip').style.display = 'none';
+        updateLockStatesBasedOnSupplierIva();
+
+        // 4. Reset invoice header fields
+        document.getElementById('invoice-type').value = '17';
+        document.getElementById('invoice-pos').value = '99';
+        document.getElementById('invoice-number').value = '';
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('date-emission').value = today;
+        const due = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        document.getElementById('date-due').value = due;
+        document.getElementById('currency').value = '171';
+        document.getElementById('exchange-rate').value = '1';
+        document.getElementById('rubro').value = '5';
+        document.getElementById('jurisdiccion').value = '2';
+        document.getElementById('invoice-observations').value = '';
+        document.getElementById('global-discount').value = '0';
+
+        // 5. Reset details
+        document.getElementById('items-tbody').innerHTML = '';
+        createRow();
+
+        // 6. Reset perceptions
+        perceptionsTbody.innerHTML = '';
+
+        // 7. Recalculate totals
+        calculateTotals();
+
+        // 8. Reset Document Viewer
+        document.getElementById('document-viewer-card').style.display = 'none';
+        document.querySelector('.app-grid').classList.remove('has-preview');
+        const viewerImg = document.getElementById('viewer-img');
+        if (viewerImg) {
+          viewerImg.src = '';
+          viewerImg.style.display = 'none';
+        }
+        const viewerCanvas = document.getElementById('viewer-canvas');
+        if (viewerCanvas) {
+          viewerCanvas.style.display = 'none';
+        }
+        const viewerPlaceholder = document.getElementById('viewer-placeholder');
+        if (viewerPlaceholder) {
+          viewerPlaceholder.style.display = 'flex';
+        }
+        currentZoom = 100;
+        applyZoom();
       }
     });
 
